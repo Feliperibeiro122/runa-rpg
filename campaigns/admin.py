@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Campaign, CampaignCharacter, CampaignInvite
+from .models import Campaign, CampaignCharacter, CampaignInvite, Skill, CharacterSkill
 
 
 # ===========================================================
@@ -44,6 +44,13 @@ class CampaignAdmin(admin.ModelAdmin):
     player_count.short_description = "Nº de Jogadores"
 
 
+# Inline para CharacterSkill
+
+class CharacterSkillInline(admin.TabularInline):
+    model = CharacterSkill
+    extra = 0
+    readonly_fields = ("total_value",)
+
 # ===========================================================
 # ADMIN: CampaignCharacter
 # ===========================================================
@@ -57,6 +64,8 @@ class CampaignCharacterAdmin(admin.ModelAdmin):
     search_fields = ("name", "user__username", "campaign__name")
     list_filter = ("campaign", "char_class", "subclass", "level")
     ordering = ("campaign", "name")
+    
+    inlines = [CharacterSkillInline]
 
     fieldsets = (
         ("Informações Gerais", {
@@ -85,6 +94,22 @@ class CampaignCharacterAdmin(admin.ModelAdmin):
         }),
     )
 
+# Skill Admin
+
+@admin.register(Skill)
+class SkillAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "ability")
+    search_fields = ("name",)
+    list_filter = ("ability",)
+
+
+# CharacterSkill Admin
+
+@admin.register(CharacterSkill)
+class CharacterSkillAdmin(admin.ModelAdmin):
+    list_display = ("id", "character", "skill", "proficiency_level", "total_value")
+    list_filter = ("skill", "proficiency_level")
+    search_fields = ("character__name", "skill__name")
 
 # ===========================================================
 # ADMIN: CampaignInvite
