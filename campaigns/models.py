@@ -53,22 +53,93 @@ class CampaignCharacter(models.Model):
     chosen_feature_options = models.ManyToManyField(FeatureOption, blank=True)
 
     # Atributos dessa campanha
-    strength = models.IntegerField(default=10)
-    dexterity = models.IntegerField(default=10)
-    constitution = models.IntegerField(default=10)
-    intelligence = models.IntegerField(default=10)
-    wisdom = models.IntegerField(default=10)
-    charisma = models.IntegerField(default=10)
+    strength = models.IntegerField(default=8)
+    dexterity = models.IntegerField(default=8)
+    constitution = models.IntegerField(default=8)
+    intelligence = models.IntegerField(default=8)
+    wisdom = models.IntegerField(default=8)
+    charisma = models.IntegerField(default=8)
 
     # Recursos variáveis da campanha
     hp = models.IntegerField(default=0)
     mana = models.IntegerField(default=0)
-    sanity = models.IntegerField(default=100)
+    sanity = models.IntegerField(default=60)
 
     notes = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.name} (Lv {self.level}) em {self.campaign.name}"
+
+# --- MODIFICADORES ---
+    @property
+    def strength_mod(self): return (self.strength - 10) // 2
+    @property
+    def dexterity_mod(self): return (self.dexterity - 10) // 2
+    @property
+    def constitution_mod(self): return (self.constitution - 10) // 2
+    @property
+    def intelligence_mod(self): return (self.intelligence - 10) // 2
+    @property
+    def wisdom_mod(self): return (self.wisdom - 10) // 2
+    @property
+    def charisma_mod(self): return (self.charisma - 10) // 2
+
+    # --- PROFICIÊNCIA ---
+    @property
+    def proficiency_bonus(self):
+        return 2 + ((self.level - 1) // 4)
+
+    def __str__(self):
+        return f"{self.character_base.name} - {self.campaign.name}"
+    
+class Skill(models.Model):
+    ABILITY_CHOICES = [
+        ("strength", "Força"),
+        ("dexterity", "Destreza"),
+        ("constitution", "Constituição"),
+        ("intelligence", "Inteligência"),
+        ("wisdom", "Sabedoria"),
+        ("charisma", "Carisma"),
+    ]
+
+    name = models.CharField(max_length=100)
+    ability = models.CharField(max_length=20, choices=ABILITY_CHOICES)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+class CharacterSkill(models.Model):
+    character = models.ForeignKey(
+        CampaignCharacter,
+        on_delete=models.CASCADE,
+        related_name="skills"
+    )
+    skill = models.ForeignKey(Skill, on_delete=models.CASCADE)
+
+    # 0 = nada, 1 = proficiente, 2 = expertise
+    proficiency_level = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = ("character", "skill")
+
+    def __str__(self):
+        return f"{self.character} - {self.skill}"
+
+    @property
+    def total_value(self):
+        ability_mod = getattr(self.character, f"{self.skill.ability}_mod")
+        prof = self.character.proficiency_bonus
+
+        if self.proficiency_level == 1:
+            return ability_mod + prof
+        if self.proficiency_level == 2:
+            return ability_mod + (prof * 2)
+
+        return ability_mod
+
     
 class CampaignInvite(models.Model):
     PENDING = "pending"
