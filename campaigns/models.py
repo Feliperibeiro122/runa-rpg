@@ -69,3 +69,28 @@ class CampaignCharacter(models.Model):
 
     def __str__(self):
         return f"{self.name} (Lv {self.level}) em {self.campaign.name}"
+    
+class CampaignInvite(models.Model):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+    STATUS_CHOICES = [
+        (PENDING, "Pendente"),
+        (ACCEPTED, "Aceito"),
+        (REJECTED, "Recusado"),
+    ]
+
+    campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="invites")
+    invited_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_invites")
+    invited_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="received_invites")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ("campaign", "invited_user")  # evita duplicar convites
+
+    def __str__(self):
+        return f"Convite para {self.invited_user} na campanha {self.campaign}"
