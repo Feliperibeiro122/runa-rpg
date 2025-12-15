@@ -6,6 +6,7 @@ from characters.models import (
     Class, Subclass,
     Feature, FeatureOption,
 )
+from django.core.exceptions import ValidationError
 
 User = settings.AUTH_USER_MODEL
 
@@ -33,7 +34,7 @@ class Campaign(models.Model):
 
 class CampaignCharacter(models.Model):
     campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="characters")
-    base_character = models.ForeignKey(CharacterBase, on_delete=models.CASCADE)
+    base_character = models.ForeignKey(CharacterBase, on_delete=models.SET_NULL, null=True, blank=True)
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
@@ -43,7 +44,11 @@ class CampaignCharacter(models.Model):
 
     # Escolhas definitivas do player
     origin = models.ForeignKey(Origin, on_delete=models.SET_NULL, null=True)
-    lineage = models.ForeignKey(OriginLineage, on_delete=models.SET_NULL, null=True)
+    lineage = models.ForeignKey(OriginLineage, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def clean(self):
+        if self.lineage and self.lineage.origin != self.origin:
+            raise ValidationError("A linhagem não pertence à origem escolhida.")
 
     char_class = models.ForeignKey(Class, on_delete=models.SET_NULL, null=True)
     subclass = models.ForeignKey(Subclass, on_delete=models.SET_NULL, null=True, blank=True)
@@ -90,7 +95,7 @@ class CampaignCharacter(models.Model):
         return 2 + ((self.level - 1) // 4)
 
     def __str__(self):
-        return f"{self.character_base.name} - {self.campaign.name}"
+        return f"{self.name} - {self.campaign.name}"
     
 class Skill(models.Model):
     ABILITY_CHOICES = [

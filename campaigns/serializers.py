@@ -1,12 +1,27 @@
 from rest_framework import serializers
-from .models import Campaign, CampaignCharacter, CampaignInvite
+from .models import Campaign, CampaignCharacter, CampaignInvite, CharacterSkill
 from characters.serializers import (
     CharacterBaseSerializer,
     OriginSerializer, OriginLineageSerializer,
     ClassSerializer, SubclassSerializer,
     FeatureSerializer, FeatureOptionSerializer
 )
+# SKILLS
+class CharacterSkillSerializer(serializers.ModelSerializer):
+    skill_name = serializers.CharField(source="skill.name", read_only=True)
+    ability = serializers.CharField(source="skill.ability", read_only=True)
+    total = serializers.IntegerField(source="total_value", read_only=True)  # calculado na model
 
+    class Meta:
+        model = CharacterSkill
+        fields = [
+            "id",
+            "skill",  # id da skill base
+            "skill_name",
+            "ability",
+            "proficiency_level",
+            "total",
+        ]
 
 # CAMPAIGN
 
@@ -40,6 +55,8 @@ class CampaignCharacterSerializer(serializers.ModelSerializer):
     chosen_features = FeatureSerializer(many=True, read_only=True)
     chosen_feature_options = FeatureOptionSerializer(many=True, read_only=True)
 
+    skills = CharacterSkillSerializer(many=True, read_only=True)
+
     user_name = serializers.CharField(source="user.username", read_only=True)
 
     class Meta:
@@ -50,6 +67,7 @@ class CampaignCharacterSerializer(serializers.ModelSerializer):
             "origin", "lineage",
             "char_class", "subclass",
             "chosen_features", "chosen_feature_options",
+            "skills",
             "strength", "dexterity", "constitution",
             "intelligence", "wisdom", "charisma",
             "hp", "mana", "sanity",
@@ -72,3 +90,8 @@ class CampaignInviteSerializer(serializers.ModelSerializer):
             "invited_by", "invited_by_name",
             "status", "created_at", "responded_at"
         ]
+
+class CharacterSkillUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CharacterSkill
+        fields = ["proficiency_level"]

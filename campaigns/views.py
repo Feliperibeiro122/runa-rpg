@@ -1,5 +1,155 @@
 from django.shortcuts import render
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.utils import timezone
+from django.db.models import Q
+
+from .models import Campaign, CampaignCharacter, CampaignInvite, CharacterSkill
+from .serializers import (
+    CampaignSerializer,
+    CampaignCharacterSerializer,
+    CampaignInviteSerializer,
+    CharacterSkillSerializer,
+    CharacterSkillUpdateSerializer
+)
 
 def campaigns(request):
     return render(request, "campaigns/campaigns.html")
+
+class CampaignViewSet(viewsets.ModelViewSet):
+    queryset = Campaign.objects.all()
+    serializer_class = CampaignSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        # owner da campanha é sempre o usuário logado
+        serializer.save(owner=self.request.user)
+
+    # ----------------------------------------
+    # LISTAR PERSONAGENS DA CAMPANHA
+    # ----------------------------------------
+    @action(detail=True, methods=["get"])
+    def characters(self, request, pk=None):
+        campaign = self.get_object()
+        chars = CampaignCharacter.objects.filter(campaign=campaign)
+        serializer = CampaignCharacterSerializer(chars, many=True)
+        return Response(serializer.data)
+
+    # ----------------------------------------
+    # LISTAR CONVITES
+    # ----------------------------------------
+    @action(detail=True, methods=["get"])
+    def invites(self, request, pk=None):
+        campaign = self.get_object()
+        invites = CampaignInvite.objects.filter(campaign=campaign)
+        serializer = CampaignInviteSerializer(invites, many=True)
+        return Response(serializer.data)
+
+    # ----------------------------------------
+    # ENVIAR CONVITE
+    # ----------------------------------------
+    @action(detail=True, methods=["post"])
+    def invite(self, request, pk=None):
+        campaign = self.get_object()
+        invited_user_id = request.data.get("user_id")
+
+        if not invited_user_id:
+            return Response({"error": "user_id é obrigatório"}, status=400)
+
+        invite = CampaignInvite.objects.create(
+            campaign=campaign,
+            invited_user_id=invited_user_id,
+            invited_by=request.user
+        )
+
+        return Response(CampaignInviteSerializer(invite).data, status=201)
+
+class CampaignCharacterViewSet(viewsets.ModelViewSet):
+    serializer_class = CampaignCharacterSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Campaign.objects.filter(
+            Q(owner=user) | Q(players=user)
+        ).distinct()
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+    # ----------------------------------------
+    # ATUALIZAR UMA SKILL EXATA
+    # ----------------------------------------
+    @action(detail=True, methods=["patch"])
+    def update_skill(self, request, pk=None):
+        character = self.get_object()
+
+        skill_id = request.data.get("skill")
+        level = request.data.get("proficiency_level")
+
+        if skill_id is None or level is None:
+            return Response({"error": "Informe skill e proficiency_level"}, status=400)
+
+        try:
+            char_skill = CharacterSkill.objects.get(character=character, skill_id=skill_id)
+        except CharacterSkill.DoesNotExist:
+            return Response({"error": "Skill não encontrada para este personagem."}, status=404)
+
+        serializer = CharacterSkillUpdateSerializer(
+            char_skill,
+            data={"proficiency_level": level},
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(CharacterSkillSerializer(char_skill).data)
+        return Response(serializer.errors, status=400)
+
+    # ----------------------------------------
+    # LISTAR AS SKILLS DO PERSONAGEM
+    # ----------------------------------------
+    @action(detail=True, methods=["get"])
+    def skills(self, request, pk=None):
+        character = self.get_object()
+        serializer = CharacterSkillSerializer(character.skills.all(), many=True)
+        return Response(serializer.data)
+
+class CampaignInviteViewSet(viewsets.ModelViewSet):
+    queryset = CampaignInvite.objects.all()
+    serializer_class = CampaignInviteSerializer
+    permission_classes = [IsAuthenticated]
+
+    # aceitar convite
+    @action(detail=True, methods=["post"])
+    def accept(self, request, pk=None):
+        invite = self.get_object()
+
+        if invite.invited_user != request.user:
+            return Response({"error": "Você não é o convidado."}, status=403)
+
+        invite.status = "accepted"
+        invite.responded_at = timezone.now()
+        invite.save()
+
+        invite.campaign.players.add(request.user)
+
+        return Response({"status": "Convite aceito."})
+
+    # recusar convite
+    @action(detail=True, methods=["post"])
+    def decline(self, request, pk=None):
+        invite = self.get_object()
+
+        if invite.invited_user != request.user:
+            return Response({"error": "Você não é o convidado."}, status=403)
+
+        invite.status = "rejected"
+        invite.responded_at = timezone.now()
+        invite.save()
+
+        return Response({"status": "Convite recusado."})
+
 
