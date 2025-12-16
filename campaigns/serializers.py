@@ -59,11 +59,14 @@ class CampaignCharacterSerializer(serializers.ModelSerializer):
 
     user_name = serializers.CharField(source="user.username", read_only=True)
 
+    status = serializers.CharField(read_only=True)
+
     class Meta:
         model = CampaignCharacter
         fields = [
             "id", "campaign", "base_character", "user", "user_name",
             "name", "level",
+            "status",
             "origin", "lineage",
             "char_class", "subclass",
             "chosen_features", "chosen_feature_options",

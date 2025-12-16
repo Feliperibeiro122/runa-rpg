@@ -33,6 +33,19 @@ class Campaign(models.Model):
         return self.name
 
 class CampaignCharacter(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Rascunho"
+        ACTIVE = "active", "Ativo"
+        DEAD = "dead", "Morto"
+        RETIRED = "retired", "Aposentado"
+        REMOVED = "removed", "Removido"
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT
+    )
+
     campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="characters")
     base_character = models.ForeignKey(CharacterBase, on_delete=models.SET_NULL, null=True, blank=True)
 

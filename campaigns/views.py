@@ -83,11 +83,20 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return CampaignCharacter.objects.filter(
+
+        queryset = CampaignCharacter.objects.filter(
             Q(user=user) |
             Q(campaign__owner=user) |
             Q(campaign__players=user)
         ).distinct()
+
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        return queryset
+
+
     
     def get_permissions(self):
     # leitura (GET, LIST, retrieve)
@@ -145,6 +154,60 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
         character = self.get_object()
         serializer = CharacterSkillSerializer(character.skills.all(), many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=["post"])
+    def activate(self, request, pk=None):
+        character = self.get_object()
+
+        if character.status != CampaignCharacter.Status.DRAFT:
+            return Response(
+                {"error": "Personagem já está ativo ou não pode ser ativado."},
+                status=400
+            )
+
+        character.status = CampaignCharacter.Status.ACTIVE
+        character.save()
+
+        return Response({"status": "Personagem ativado."})
+    
+    #STATUS DO PERSONAGEM
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[IsAuthenticated, IsCampaignOwnerForCharacter]
+    )
+    def kill(self, request, pk=None):
+        character = self.get_object()
+
+        character.status = CampaignCharacter.Status.DEAD
+        character.save()
+
+        return Response({"status": "Personagem morto."})
+
+    @action(detail=True, methods=["post"])
+    def retire(self, request, pk=None):
+        character = self.get_object()
+
+        if character.user != request.user:
+            return Response({"error": "Você não é o dono do personagem."}, status=403)
+
+        character.status = CampaignCharacter.Status.RETIRED
+        character.save()
+
+        return Response({"status": "Personagem aposentado."})
+
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[IsAuthenticated, IsCampaignOwnerForCharacter]
+    )
+    def remove(self, request, pk=None):
+        character = self.get_object()
+
+        character.status = CampaignCharacter.Status.REMOVED
+        character.save()
+
+        return Response({"status": "Personagem removido da campanha."})
 
 
 class CampaignInviteViewSet(viewsets.ModelViewSet):
