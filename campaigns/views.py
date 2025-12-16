@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q
+from django.core.exceptions import ValidationError
 
 from .models import Campaign, CampaignCharacter, CampaignInvite, CharacterSkill
 from .serializers import (
@@ -155,58 +156,54 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
         serializer = CharacterSkillSerializer(character.skills.all(), many=True)
         return Response(serializer.data)
     
+    #STATUS DO PERSONAGEM
     @action(detail=True, methods=["post"])
     def activate(self, request, pk=None):
         character = self.get_object()
 
-        if character.status != CampaignCharacter.Status.DRAFT:
-            return Response(
-                {"error": "Personagem já está ativo ou não pode ser ativado."},
-                status=400
+        try:
+            character.change_status(
+                CampaignCharacter.Status.ACTIVE,
+                request.user
             )
-
-        character.status = CampaignCharacter.Status.ACTIVE
-        character.save()
+        except ValidationError as e:
+            return Response({"error": e.message}, status=403)
 
         return Response({"status": "Personagem ativado."})
     
-    #STATUS DO PERSONAGEM
-    @action(
-        detail=True,
-        methods=["post"],
-        permission_classes=[IsAuthenticated, IsCampaignOwnerForCharacter]
-    )
+    @action(detail=True, methods=["post"])
     def kill(self, request, pk=None):
         character = self.get_object()
 
-        character.status = CampaignCharacter.Status.DEAD
-        character.save()
+        try:
+            character.change_status(
+                CampaignCharacter.Status.DEAD,
+                request.user
+            )
+        except ValidationError as e:
+            return Response({"error": e.message}, status=403)
 
         return Response({"status": "Personagem morto."})
 
+
     @action(detail=True, methods=["post"])
-    def retire(self, request, pk=None):
-        character = self.get_object()
-
-        if character.user != request.user:
-            return Response({"error": "Você não é o dono do personagem."}, status=403)
-
-        character.status = CampaignCharacter.Status.RETIRED
-        character.save()
-
+    def retire(self, request, pk=None): 
+        character = self.get_object() 
+        try:
+            character.change_status( CampaignCharacter.Status.RETIRED, request.user )
+        except ValidationError as e:
+            return Response({"error": e.message}, status=403) 
+        
         return Response({"status": "Personagem aposentado."})
 
-    @action(
-        detail=True,
-        methods=["post"],
-        permission_classes=[IsAuthenticated, IsCampaignOwnerForCharacter]
-    )
-    def remove(self, request, pk=None):
-        character = self.get_object()
-
-        character.status = CampaignCharacter.Status.REMOVED
-        character.save()
-
+    @action(detail=True, methods=["post"])
+    def remove(self, request, pk=None): 
+        character = self.get_object() 
+        try:
+            character.change_status( CampaignCharacter.Status.REMOVED, request.user )
+        except ValidationError as e:
+            return Response({"error": e.message}, status=403) 
+        
         return Response({"status": "Personagem removido da campanha."})
 
 

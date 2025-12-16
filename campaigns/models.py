@@ -46,6 +46,33 @@ class CampaignCharacter(models.Model):
         default=Status.DRAFT
     )
 
+    def can_change_status(self, new_status, user):
+        # não pode mudar se já foi removido
+        if self.status == self.Status.REMOVED:
+            return False, "Personagem removido não pode mudar de status."
+
+        # regras por status atual
+        if self.status == self.Status.DRAFT:
+            if new_status == self.Status.ACTIVE:
+                return self.user == user, "Apenas o dono pode ativar o personagem."
+
+        if self.status == self.Status.ACTIVE:
+            if new_status in [self.Status.DEAD, self.Status.REMOVED]:
+                return self.campaign.owner == user, "Apenas o mestre pode fazer isso."
+            if new_status == self.Status.RETIRED:
+                return self.user == user, "Apenas o dono pode aposentar o personagem."
+
+        return False, "Transição de status inválida."
+    
+    def change_status(self, new_status, user):
+        allowed, message = self.can_change_status(new_status, user)
+        if not allowed:
+            raise ValidationError(message)
+
+        self.status = new_status
+        self.save()
+
+
     campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="characters")
     base_character = models.ForeignKey(CharacterBase, on_delete=models.SET_NULL, null=True, blank=True)
 
