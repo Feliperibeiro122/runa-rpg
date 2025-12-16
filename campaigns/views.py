@@ -19,9 +19,14 @@ def campaigns(request):
     return render(request, "campaigns/campaigns.html")
 
 class CampaignViewSet(viewsets.ModelViewSet):
-    queryset = Campaign.objects.all()
     serializer_class = CampaignSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Campaign.objects.filter(
+            Q(owner=user) | Q(players=user)
+        ).distinct()
 
     def perform_create(self, serializer):
         # owner da campanha é sempre o usuário logado
@@ -72,12 +77,11 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return Campaign.objects.filter(
-            Q(owner=user) | Q(players=user)
+        return CampaignCharacter.objects.filter(
+            Q(user=user) |
+            Q(campaign__owner=user) |
+            Q(campaign__players=user)
         ).distinct()
-
-    def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
 
     # ----------------------------------------
     # ATUALIZAR UMA SKILL EXATA
@@ -118,9 +122,18 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 class CampaignInviteViewSet(viewsets.ModelViewSet):
-    queryset = CampaignInvite.objects.all()
     serializer_class = CampaignInviteSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = CampaignInvite.objects.filter(invited_user=user)
+
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        return queryset
 
     # aceitar convite
     @action(detail=True, methods=["post"])
