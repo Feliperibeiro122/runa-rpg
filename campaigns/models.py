@@ -133,6 +133,14 @@ class CharacterSkill(models.Model):
     def __str__(self):
         return f"{self.character} - {self.skill}"
 
+    def clean(self):
+        if self.proficiency_level not in [0, 1, 2]:
+            raise ValidationError("Nível de proficiência inválido.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     @property
     def total_value(self):
         ability_mod = getattr(self.character, f"{self.skill.ability}_mod")

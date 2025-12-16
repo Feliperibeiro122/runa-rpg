@@ -95,3 +95,10 @@ class CharacterSkillUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CharacterSkill
         fields = ["proficiency_level"]
+
+    def validate_proficiency_level(self, value):
+        if value not in [0, 1, 2]:
+            raise serializers.ValidationError(
+                "Nível de proficiência inválido."
+            )
+        return value

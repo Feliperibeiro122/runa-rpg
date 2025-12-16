@@ -14,6 +14,7 @@ from .serializers import (
     CharacterSkillSerializer,
     CharacterSkillUpdateSerializer
 )
+from .permissions import IsCampaignOwner,IsCharacterOwner,IsInviteReceiver, IsCampaignOwnerForCharacter, IsCampaignCharacterPlayer, CanEditCharacterResources
 
 def campaigns(request):
     return render(request, "campaigns/campaigns.html")
@@ -27,6 +28,11 @@ class CampaignViewSet(viewsets.ModelViewSet):
         return Campaign.objects.filter(
             Q(owner=user) | Q(players=user)
         ).distinct()
+    
+    def get_permissions(self):
+        if self.action in ["update", "partial_update", "destroy"]:
+            return [IsAuthenticated(), IsCampaignOwner()]
+        return [IsAuthenticated()]
 
     def perform_create(self, serializer):
         # owner da campanha é sempre o usuário logado
@@ -55,7 +61,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
     # ----------------------------------------
     # ENVIAR CONVITE
     # ----------------------------------------
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsCampaignOwner])
     def invite(self, request, pk=None):
         campaign = self.get_object()
         invited_user_id = request.data.get("user_id")
@@ -82,6 +88,21 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
             Q(campaign__owner=user) |
             Q(campaign__players=user)
         ).distinct()
+    
+    def get_permissions(self):
+    # leitura (GET, LIST, retrieve)
+        if self.action in ["retrieve", "list", "skills"]:
+            return [IsAuthenticated(), IsCampaignCharacterPlayer()]
+
+    # editar ficha
+        if self.action in ["update", "partial_update"]:
+            return [IsAuthenticated(), CanEditCharacterResources()]
+
+    # deletar personagem
+        if self.action == "destroy":
+            return [IsAuthenticated(), IsCampaignOwnerForCharacter()]
+
+        return [IsAuthenticated()]
 
     # ----------------------------------------
     # ATUALIZAR UMA SKILL EXATA
@@ -107,10 +128,14 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
             partial=True
         )
 
-        if serializer.is_valid():
-            serializer.save()
-            return Response(CharacterSkillSerializer(char_skill).data)
-        return Response(serializer.errors, status=400)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            CharacterSkillSerializer(char_skill).data
+        )
+
+
 
     # ----------------------------------------
     # LISTAR AS SKILLS DO PERSONAGEM
@@ -121,27 +146,26 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
         serializer = CharacterSkillSerializer(character.skills.all(), many=True)
         return Response(serializer.data)
 
+
 class CampaignInviteViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignInviteSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsInviteReceiver]
 
     def get_queryset(self):
-        user = self.request.user
-        queryset = CampaignInvite.objects.filter(invited_user=user)
-
-        status_param = self.request.query_params.get("status")
-        if status_param:
-            queryset = queryset.filter(status=status_param)
-
-        return queryset
+        return CampaignInvite.objects.filter(
+        invited_user=self.request.user
+        )
 
     # aceitar convite
     @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):
         invite = self.get_object()
 
-        if invite.invited_user != request.user:
-            return Response({"error": "Você não é o convidado."}, status=403)
+        if invite.status != "pending":
+            return Response(
+        {"error": "Este convite já foi respondido."},
+        status=400
+        )
 
         invite.status = "accepted"
         invite.responded_at = timezone.now()
@@ -156,8 +180,11 @@ class CampaignInviteViewSet(viewsets.ModelViewSet):
     def decline(self, request, pk=None):
         invite = self.get_object()
 
-        if invite.invited_user != request.user:
-            return Response({"error": "Você não é o convidado."}, status=403)
+        if invite.status != "pending":
+            return Response(
+        {"error": "Este convite já foi respondido."},
+        status=400
+        )
 
         invite.status = "rejected"
         invite.responded_at = timezone.now()
