@@ -29,6 +29,13 @@ class Campaign(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def log(self, message, actor=None):
+        CampaignLog.objects.create(
+            campaign=self,
+            actor=actor,
+            message=message
+        )
+
     def __str__(self):
         return self.name
 
@@ -47,9 +54,15 @@ class CampaignCharacter(models.Model):
     )
 
     def can_change_status(self, new_status, user):
+        if new_status == self.status:
+            return False, "O personagem já está nesse status."
+        
         # não pode mudar se já foi removido
         if self.status == self.Status.REMOVED:
-            return False, "Personagem removido não pode mudar de status."
+            return (
+                user == self.campaign.owner,
+                "Apenas o mestre pode alterar um personagem removido."
+            )
 
         # regras por status atual
         if self.status == self.Status.DRAFT:
@@ -61,6 +74,16 @@ class CampaignCharacter(models.Model):
                 return self.campaign.owner == user, "Apenas o mestre pode fazer isso."
             if new_status == self.Status.RETIRED:
                 return self.user == user, "Apenas o dono pode aposentar o personagem."
+            
+        # DEAD → ACTIVE (reviver / inimigo / NPC)
+        if self.status == self.Status.DEAD:
+            if new_status == self.Status.ACTIVE:
+                return self.campaign.owner == user, "Apenas o mestre pode reativar."
+
+    # RETIRED → ACTIVE (voltar à campanha)
+        if self.status == self.Status.RETIRED:
+            if new_status == self.Status.ACTIVE:
+                return self.campaign.owner == user, "Apenas o mestre pode reativar."
 
         return False, "Transição de status inválida."
     
@@ -69,9 +92,17 @@ class CampaignCharacter(models.Model):
         if not allowed:
             raise ValidationError(message)
 
+        old_status = self.status
         self.status = new_status
         self.save()
 
+        CampaignLog.objects.create(
+            campaign=self.campaign,
+            character=self,
+            actor=user,
+            action="STATUS_CHANGE",
+            message=f"{self.name}: {old_status} → {new_status}"
+        )
 
     campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="characters")
     base_character = models.ForeignKey(CharacterBase, on_delete=models.SET_NULL, null=True, blank=True)
@@ -218,3 +249,26 @@ class CampaignInvite(models.Model):
 
     def __str__(self):
         return f"Convite para {self.invited_user} na campanha {self.campaign}"
+
+class CampaignLog(models.Model):
+    campaign = models.ForeignKey(
+        Campaign,
+        on_delete=models.CASCADE,
+        related_name="logs"
+    )
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"[{self.campaign.name}] {self.message}"

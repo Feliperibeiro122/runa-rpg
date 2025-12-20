@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Campaign, CampaignCharacter, CampaignInvite, CharacterSkill
+from .models import Campaign, CampaignCharacter, CampaignInvite, CharacterSkill, CampaignLog
 from characters.serializers import (
     CharacterBaseSerializer,
     OriginSerializer, OriginLineageSerializer,
@@ -105,3 +105,19 @@ class CharacterSkillUpdateSerializer(serializers.ModelSerializer):
                 "Nível de proficiência inválido."
             )
         return value
+    
+class CampaignLogSerializer(serializers.ModelSerializer):
+    actor_name = serializers.CharField(
+        source="actor.username",
+        read_only=True
+    )
+
+    class Meta:
+        model = CampaignLog
+        fields = [
+            "id",
+            "message",
+            "actor",
+            "actor_name",
+            "created_at"
+        ]

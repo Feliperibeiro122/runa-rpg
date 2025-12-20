@@ -7,13 +7,14 @@ from django.utils import timezone
 from django.db.models import Q
 from django.core.exceptions import ValidationError
 
-from .models import Campaign, CampaignCharacter, CampaignInvite, CharacterSkill
+from .models import Campaign, CampaignCharacter, CampaignInvite, CharacterSkill, CampaignLog
 from .serializers import (
     CampaignSerializer,
     CampaignCharacterSerializer,
     CampaignInviteSerializer,
     CharacterSkillSerializer,
-    CharacterSkillUpdateSerializer
+    CharacterSkillUpdateSerializer,
+    CampaignLogSerializer
 )
 from .permissions import IsCampaignOwner,IsCharacterOwner,IsInviteReceiver, IsCampaignOwnerForCharacter, IsCampaignCharacterPlayer, CanEditCharacterResources
 
@@ -91,6 +92,13 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
             Q(campaign__players=user)
         ).distinct()
 
+        queryset = queryset.exclude(
+        status=CampaignCharacter.Status.REMOVED
+    ).exclude(
+        ~Q(campaign__owner=user),
+        status=CampaignCharacter.Status.REMOVED
+    )
+
         status_param = self.request.query_params.get("status")
         if status_param:
             queryset = queryset.filter(status=status_param)
@@ -157,54 +165,80 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     #STATUS DO PERSONAGEM
+
+    def _change_status(self, request, character, status, success_message):
+        try:
+            character.change_status(status, request.user)
+        except ValidationError as e:
+            return Response(
+                {"error": e.message},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return Response({"status": success_message})
+
     @action(detail=True, methods=["post"])
     def activate(self, request, pk=None):
         character = self.get_object()
-
-        try:
-            character.change_status(
-                CampaignCharacter.Status.ACTIVE,
-                request.user
-            )
-        except ValidationError as e:
-            return Response({"error": e.message}, status=403)
-
-        return Response({"status": "Personagem ativado."})
+        return self._change_status(
+            request,
+            character,
+            CampaignCharacter.Status.ACTIVE,
+            "Personagem ativado."
+        )
     
     @action(detail=True, methods=["post"])
     def kill(self, request, pk=None):
         character = self.get_object()
-
-        try:
-            character.change_status(
-                CampaignCharacter.Status.DEAD,
-                request.user
-            )
-        except ValidationError as e:
-            return Response({"error": e.message}, status=403)
-
-        return Response({"status": "Personagem morto."})
+        return self._change_status(
+            request,
+            character,
+            CampaignCharacter.Status.DEAD,
+            "Personagem morto."
+        )
 
 
     @action(detail=True, methods=["post"])
-    def retire(self, request, pk=None): 
-        character = self.get_object() 
-        try:
-            character.change_status( CampaignCharacter.Status.RETIRED, request.user )
-        except ValidationError as e:
-            return Response({"error": e.message}, status=403) 
-        
-        return Response({"status": "Personagem aposentado."})
+    def retire(self, request, pk=None):
+        character = self.get_object()
+        return self._change_status(
+            request,
+            character,
+            CampaignCharacter.Status.RETIRED,
+            "Personagem aposentado."
+        )
 
     @action(detail=True, methods=["post"])
-    def remove(self, request, pk=None): 
-        character = self.get_object() 
-        try:
-            character.change_status( CampaignCharacter.Status.REMOVED, request.user )
-        except ValidationError as e:
-            return Response({"error": e.message}, status=403) 
-        
-        return Response({"status": "Personagem removido da campanha."})
+    def remove(self, request, pk=None):
+        character = self.get_object()
+        return self._change_status(
+            request,
+            character,
+            CampaignCharacter.Status.REMOVED,
+            "Personagem removido da campanha."
+        )
+    
+    @action(detail=True, methods=["post"])
+    def reactivate(self, request, pk=None):
+        character = self.get_object()
+        return self._change_status(
+            request,
+            character,
+            CampaignCharacter.Status.ACTIVE,
+            "Personagem voltou à ativa."
+        )
+
+class CampaignLogViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = CampaignLogSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return CampaignLog.objects.filter(
+            Q(campaign__owner=user) |
+            Q(campaign__players=user)
+        )
+
 
 
 class CampaignInviteViewSet(viewsets.ModelViewSet):
