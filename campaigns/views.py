@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q
 from django.core.exceptions import ValidationError
+from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from .models import Campaign, CampaignCharacter, CampaignInvite, CharacterSkill, CampaignLog
 from .serializers import (
@@ -86,24 +87,22 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        queryset = CampaignCharacter.objects.filter(
+        qs = CampaignCharacter.objects.filter(
             Q(user=user) |
             Q(campaign__owner=user) |
             Q(campaign__players=user)
         ).distinct()
 
-        queryset = queryset.exclude(
-        status=CampaignCharacter.Status.REMOVED
-    ).exclude(
-        ~Q(campaign__owner=user),
-        status=CampaignCharacter.Status.REMOVED
-    )
+        # Se o usuário NÃO é mestre de nenhuma campanha
+        if not Campaign.objects.filter(owner=user).exists():
+            qs = qs.exclude(status=CampaignCharacter.Status.REMOVED)
 
+        # filtro opcional por status
         status_param = self.request.query_params.get("status")
         if status_param:
-            queryset = queryset.filter(status=status_param)
+            qs = qs.filter(status=status_param)
 
-        return queryset
+        return qs
 
 
     
@@ -228,16 +227,16 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
             "Personagem voltou à ativa."
         )
 
-class CampaignLogViewSet(viewsets.ReadOnlyModelViewSet):
+class CampaignLogViewSet(ReadOnlyModelViewSet):
     serializer_class = CampaignLogSerializer
-    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
+        
         return CampaignLog.objects.filter(
             Q(campaign__owner=user) |
             Q(campaign__players=user)
-        )
+        ).distinct()
 
 
 
