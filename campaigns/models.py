@@ -29,7 +29,7 @@ class Campaign(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def log(self, message, actor=None):
+    def log(self, *, actor, message):
         CampaignLog.objects.create(
             campaign=self,
             actor=actor,
@@ -96,11 +96,8 @@ class CampaignCharacter(models.Model):
         self.status = new_status
         self.save()
 
-        CampaignLog.objects.create(
-            campaign=self.campaign,
-            character=self,
+        self.campaign.log(
             actor=user,
-            action="STATUS_CHANGE",
             message=f"{self.name}: {old_status} → {new_status}"
         )
 
