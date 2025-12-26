@@ -116,6 +116,7 @@ class CampaignLogSerializer(serializers.ModelSerializer):
         model = CampaignLog
         fields = [
             "id",
+            "type",
             "message",
             "actor",
             "actor_name",

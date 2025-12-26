@@ -29,12 +29,17 @@ class Campaign(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def log(self, *, actor, message):
+    def log(self, *, actor, message, type=None):
+        from .models import CampaignLog  # ou from . import CampaignLog
+
         CampaignLog.objects.create(
             campaign=self,
             actor=actor,
+            type=type or CampaignLog.LogType.SYSTEM,
             message=message
         )
+
+
 
     def __str__(self):
         return self.name
@@ -98,6 +103,7 @@ class CampaignCharacter(models.Model):
 
         self.campaign.log(
             actor=user,
+            type=CampaignLog.LogType.STATUS_CHANGE,
             message=f"{self.name}: {old_status} → {new_status}"
         )
 
@@ -248,6 +254,12 @@ class CampaignInvite(models.Model):
         return f"Convite para {self.invited_user} na campanha {self.campaign}"
 
 class CampaignLog(models.Model):
+    class LogType(models.TextChoices):
+        STATUS_CHANGE = "status_change", "Mudança de status"
+        CHARACTER_CREATED = "character_created", "Personagem criado"
+        CHARACTER_REMOVED = "character_removed", "Personagem removido"
+        SYSTEM = "system", "Sistema"
+
     campaign = models.ForeignKey(
         Campaign,
         on_delete=models.CASCADE,
@@ -259,6 +271,12 @@ class CampaignLog(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True
+    )
+
+    type = models.CharField(
+        max_length=30,
+        choices=LogType.choices,
+        default=LogType.SYSTEM
     )
 
     message = models.TextField()
