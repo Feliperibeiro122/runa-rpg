@@ -107,20 +107,41 @@ class CampaignCharacterViewSet(viewsets.ModelViewSet):
 
     
     def get_permissions(self):
-    # leitura (GET, LIST, retrieve)
+        # leitura
         if self.action in ["retrieve", "list", "skills"]:
-            return [IsAuthenticated(), IsCampaignCharacterPlayer()]
+            return [
+                IsAuthenticated(),
+                IsCampaignCharacterPlayer()
+            ]
 
-    # editar ficha
-        if self.action in ["update", "partial_update"]:
-            return [IsAuthenticated(), CanEditCharacterResources()]
+        # editar ficha (atributos, skills, recursos)
+        if self.action in ["update", "partial_update", "update_skill"]:
+            return [
+                IsAuthenticated(),
+                CanEditCharacterResources()
+            ]
 
-    # deletar personagem
+        # status do personagem
+        if self.action in [
+            "activate",
+            "reactivate",
+            "kill",
+            "retire",
+            "remove"
+        ]:
+            return [
+                IsAuthenticated(),
+                IsCampaignCharacterPlayer()
+            ]
+
+        # deletar definitivamente
         if self.action == "destroy":
-            return [IsAuthenticated(), IsCampaignOwnerForCharacter()]
+            return [
+                IsAuthenticated(),
+                IsCampaignOwnerForCharacter()
+            ]
 
         return [IsAuthenticated()]
-
     # ----------------------------------------
     # ATUALIZAR UMA SKILL EXATA
     # ----------------------------------------

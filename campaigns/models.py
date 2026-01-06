@@ -107,6 +107,19 @@ class CampaignCharacter(models.Model):
             message=f"{self.name}: {old_status} → {new_status}"
         )
 
+    def available_actions(self, user):
+        actions = []
+
+        for status, _ in self.Status.choices:
+            if status == self.status:
+                continue
+
+            allowed, _ = self.can_change_status(status, user)
+            if allowed:
+                actions.append(status)
+
+        return actions
+
     campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="characters")
     base_character = models.ForeignKey(CharacterBase, on_delete=models.SET_NULL, null=True, blank=True)
 

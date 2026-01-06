@@ -45,6 +45,7 @@ class CampaignSerializer(serializers.ModelSerializer):
 
 
 class CampaignCharacterSerializer(serializers.ModelSerializer):
+    available_actions = serializers.SerializerMethodField()
     base_character = CharacterBaseSerializer(read_only=True)
 
     origin = OriginSerializer(read_only=True)
@@ -61,12 +62,20 @@ class CampaignCharacterSerializer(serializers.ModelSerializer):
 
     status = serializers.CharField(read_only=True)
 
+    def get_available_actions(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return []
+
+        return obj.available_actions(request.user)
+
     class Meta:
         model = CampaignCharacter
         fields = [
             "id", "campaign", "base_character", "user", "user_name",
             "name", "level",
             "status",
+            "available_actions",
             "origin", "lineage",
             "char_class", "subclass",
             "chosen_features", "chosen_feature_options",
